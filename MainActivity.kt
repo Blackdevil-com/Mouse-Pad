@@ -1,7 +1,5 @@
 package com.example.ownmouse
 
-
-// Updated in drag function
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -49,7 +47,9 @@ class MainActivity : AppCompatActivity() {
         val touchPad = findViewById<View>(R.id.touchPad)
         val rightClickBtn = findViewById<Button>(R.id.rightClickBtn)
         val leftClickBtn = findViewById<Button>(R.id.leftClickBtn)
-        
+        val scrollArea = findViewById<View>(R.id.scrollArea)
+        var lastScrollY = 0f
+
 
         // Connect in background
         executor.execute {
@@ -125,8 +125,6 @@ class MainActivity : AppCompatActivity() {
                 val now = System.currentTimeMillis()
                 val interval = if (isDoubleTapDragging) dragInterval else normalInterval
 
-
-
                 if (now - lastSendTime > interval) {
                     if (isDoubleTapDragging) sendCommand("DRAG_MOVE,$dx,$dy")
                     else sendCommand("M,$dx,$dy")
@@ -134,14 +132,32 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-
-
             // Finger lifted
             if (event.action == MotionEvent.ACTION_UP && isDoubleTapDragging) {
                 sendCommand("DRAG_END")
                 isDoubleTapDragging = false
             }
 
+            true
+        }
+
+        scrollArea.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastScrollY = event.y
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = event.y - lastScrollY
+                    lastScrollY = event.y  // update immediately for quick direction changes
+
+                    if (abs(dy) > 7) {
+                        // send with higher scaling for responsiveness
+                        val scaledDy = dy * 1.5f
+                        sendCommand("SCROLL,$scaledDy")
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {}
+            }
             true
         }
     }

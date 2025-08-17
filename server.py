@@ -1,6 +1,3 @@
-# Changes made in drag function
-
-
 import socket
 import pyautogui
 
@@ -76,6 +73,15 @@ try:
             elif parts[0] == "DRAG_END" and dragging:
                 dragging = False
                 pyautogui.mouseUp(button="left")
+
+            elif parts[0] == "SCROLL" and len(parts) == 2:
+                try:
+                    dy = float(parts[1])
+                    scroll_amount = int(dy * 6)  # adjust sensitivity
+                    if scroll_amount != 0:
+                        pyautogui.scroll(-scroll_amount)  # negative because UI dy is opposite
+                except ValueError:
+                    print("Invalid scroll:", parts)
 
 except Exception as e:
     print("Error:", e)
