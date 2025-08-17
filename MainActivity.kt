@@ -28,12 +28,16 @@ class MainActivity : AppCompatActivity() {
 
     private var lastSendTime = 0L
     private val normalInterval = 35L
-    private val dragInterval = 25L // reduced flooding
+    private val dragInterval = 25L
+    private val movementThreshold = 4  // configurable 3–5px
 
     private val executor = Executors.newSingleThreadExecutor()
     private val uiHandler = Handler(Looper.getMainLooper())
 
-    private var isDragging = false
+    private var isDoubleTapDragging = false
+    private var doubleTapDownTime = 0L
+    private val dragDelay = 150L // milliseconds to decide drag vs double-click
+    private var isFingerDown = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         val touchPad = findViewById<View>(R.id.touchPad)
         val rightClickBtn = findViewById<Button>(R.id.rightClickBtn)
         val leftClickBtn = findViewById<Button>(R.id.leftClickBtn)
+        
 
         // Connect in background
         executor.execute {
@@ -59,31 +64,49 @@ class MainActivity : AppCompatActivity() {
         rightClickBtn.setOnClickListener { sendCommand("RCLICK") }
         leftClickBtn.setOnClickListener { sendCommand("LCLICK") }
 
-        // Setup gesture detector
+        // Gesture detector
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(e: MotionEvent) = sendClick("LCLICK")
-            override fun onDoubleTap(e: MotionEvent) = sendClick("DCLICK")
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (!isDoubleTapDragging) sendCommand("LCLICK")
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                doubleTapDownTime = System.currentTimeMillis()
+                return true
+            }
+
             override fun onDoubleTapEvent(e: MotionEvent): Boolean {
                 when (e.action) {
-                    MotionEvent.ACTION_DOWN -> if (!isDragging) {
-                        isDragging = true
-                        sendCommand("DRAG_START")
+                    MotionEvent.ACTION_DOWN -> {
+                        isFingerDown = true
+                        doubleTapDownTime = System.currentTimeMillis()
+                        uiHandler.postDelayed({
+                            if (isFingerDown) { // still holding finger
+                                if (!isDoubleTapDragging) {
+                                    isDoubleTapDragging = true
+                                    sendCommand("DRAG_START")
+                                }
+                            }
+                        }, dragDelay)
                     }
-                    MotionEvent.ACTION_UP -> if (isDragging) {
-                        sendCommand("DRAG_END")
-                        isDragging = false
+
+                    MotionEvent.ACTION_UP -> {
+                        isFingerDown = false
+                        val elapsed = System.currentTimeMillis() - doubleTapDownTime
+                        if (isDoubleTapDragging) {
+                            sendCommand("DRAG_END")
+                            isDoubleTapDragging = false
+                        } else if (elapsed < dragDelay) {
+                            sendCommand("DCLICK")
+                        }
                     }
                 }
                 return true
             }
 
             override fun onLongPress(e: MotionEvent) {
-                if (!isDragging) sendCommand("RCLICK")
-            }
-
-            private fun sendClick(cmd: String): Boolean {
-                if (!isDragging) sendCommand(cmd)
-                return true
+                if (!isDoubleTapDragging) sendCommand("RCLICK")
             }
         })
 
@@ -91,29 +114,28 @@ class MainActivity : AppCompatActivity() {
         touchPad.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
 
-            when (event.action) {
-                MotionEvent.ACTION_MOVE -> {
-                    if (event.historySize > 0) {
-                        val dx = (event.x - event.getHistoricalX(0)).toInt()
-                        val dy = (event.y - event.getHistoricalY(0)).toInt()
+            if (event.historySize > 0) {
+                val dx = (event.x - event.getHistoricalX(0)).toInt()
+                val dy = (event.y - event.getHistoricalY(0)).toInt()
 
-                        // ignore tiny moves
-                        if (abs(dx) < 5 && abs(dy) < 5) return@setOnTouchListener true
+                if (abs(dx) < movementThreshold && abs(dy) < movementThreshold) return@setOnTouchListener true
 
-                        val now = System.currentTimeMillis()
-                        val interval = if (isDragging) dragInterval else normalInterval
-                        if (now - lastSendTime > interval) {
-                            if (isDragging) sendCommand("DRAG_MOVE,$dx,$dy")
-                            else sendCommand("M,$dx,$dy")
-                            lastSendTime = now
-                        }
-                    }
-                }
-                MotionEvent.ACTION_UP -> if (isDragging) {
-                    sendCommand("DRAG_END")
-                    isDragging = false
+                val now = System.currentTimeMillis()
+                val interval = if (isDoubleTapDragging) dragInterval else normalInterval
+
+                if (now - lastSendTime > interval) {
+                    if (isDoubleTapDragging) sendCommand("DRAG_MOVE,$dx,$dy")
+                    else sendCommand("M,$dx,$dy")
+                    lastSendTime = now
                 }
             }
+
+            // Finger lifted
+            if (event.action == MotionEvent.ACTION_UP && isDoubleTapDragging) {
+                sendCommand("DRAG_END")
+                isDoubleTapDragging = false
+            }
+
             true
         }
     }

@@ -4,9 +4,8 @@ import pyautogui
 HOST = "0.0.0.0"
 PORT = 5007
 
-# Tuned values
-SENSITIVITY = 5.0   # Higher = faster cursor
-ALPHA = 0.8         # Lower = more smoothing
+SENSITIVITY = 5.0
+ALPHA = 0.8
 
 pyautogui.FAILSAFE = False
 
@@ -25,7 +24,7 @@ try:
     while True:
         data = conn.recv(1024)
         if not data:
-            print("Client disconnected. Stopping server.")
+            print("Client disconnected.")
             break
 
         data = data.decode().strip()
@@ -36,19 +35,16 @@ try:
                 try:
                     dx = int(parts[1])
                     dy = int(parts[2])
-
-                    # Smoothing
                     dx = ALPHA * dx + (1 - ALPHA) * last_dx
                     dy = ALPHA * dy + (1 - ALPHA) * last_dy
                     last_dx, last_dy = dx, dy
 
                     move_x = int(dx * SENSITIVITY)
                     move_y = int(dy * SENSITIVITY)
-
                     if move_x != 0 or move_y != 0:
                         pyautogui.moveRel(move_x, move_y, duration=0)
                 except ValueError:
-                    print("Invalid data:", parts)
+                    print("Invalid M packet:", parts)
 
             elif parts[0] == "LCLICK":
                 pyautogui.click(button="left")
