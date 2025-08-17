@@ -1,5 +1,7 @@
 package com.example.ownmouse
 
+
+// Updated in drag function
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -123,12 +125,16 @@ class MainActivity : AppCompatActivity() {
                 val now = System.currentTimeMillis()
                 val interval = if (isDoubleTapDragging) dragInterval else normalInterval
 
+
+
                 if (now - lastSendTime > interval) {
                     if (isDoubleTapDragging) sendCommand("DRAG_MOVE,$dx,$dy")
                     else sendCommand("M,$dx,$dy")
                     lastSendTime = now
                 }
             }
+
+
 
             // Finger lifted
             if (event.action == MotionEvent.ACTION_UP && isDoubleTapDragging) {
