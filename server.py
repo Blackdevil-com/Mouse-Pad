@@ -6,7 +6,7 @@ PORT = 5007
 
 # Tuned values
 SENSITIVITY = 5.0   # Higher = faster cursor
-ALPHA = 0.8        # Lower = less lag
+ALPHA = 0.8         # Lower = more smoothing
 
 pyautogui.FAILSAFE = False
 
@@ -18,7 +18,8 @@ print(f"Listening on {HOST}:{PORT}")
 conn, addr = sock.accept()
 print(f"Connected by {addr}")
 
-last_dx, last_dy = 0.0, 0.0  # smoothing memory
+dragging = False
+last_dx, last_dy = 0.0, 0.0
 
 try:
     while True:
@@ -36,18 +37,16 @@ try:
                     dx = int(parts[1])
                     dy = int(parts[2])
 
-                    # Apply smoothing
+                    # Smoothing
                     dx = ALPHA * dx + (1 - ALPHA) * last_dx
                     dy = ALPHA * dy + (1 - ALPHA) * last_dy
                     last_dx, last_dy = dx, dy
 
-                    # Apply sensitivity
                     move_x = int(dx * SENSITIVITY)
                     move_y = int(dy * SENSITIVITY)
 
                     if move_x != 0 or move_y != 0:
                         pyautogui.moveRel(move_x, move_y, duration=0)
-
                 except ValueError:
                     print("Invalid data:", parts)
 
@@ -61,19 +60,22 @@ try:
                 pyautogui.doubleClick(button="left")
 
             elif parts[0] == "DRAG_START":
+                dragging = True
                 pyautogui.mouseDown(button="left")
 
-            elif parts[0] == "DRAG_MOVE" and len(parts) == 3:
+            elif parts[0] == "DRAG_MOVE" and len(parts) == 3 and dragging:
                 try:
                     dx = int(parts[1])
                     dy = int(parts[2])
                     move_x = int(dx * SENSITIVITY)
                     move_y = int(dy * SENSITIVITY)
-                    pyautogui.moveRel(move_x, move_y, duration=0)
+                    if move_x != 0 or move_y != 0:
+                        pyautogui.moveRel(move_x, move_y, duration=0)
                 except ValueError:
                     print("Invalid drag move:", parts)
 
-            elif parts[0] == "DRAG_END":
+            elif parts[0] == "DRAG_END" and dragging:
+                dragging = False
                 pyautogui.mouseUp(button="left")
 
 except Exception as e:

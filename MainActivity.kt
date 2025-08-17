@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private var lastSendTime = 0L
     private val normalInterval = 35L
-    private val dragInterval = 15L
+    private val dragInterval = 25L // reduced flooding
 
     private val executor = Executors.newSingleThreadExecutor()
     private val uiHandler = Handler(Looper.getMainLooper())
@@ -56,53 +56,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        rightClickBtn.setOnClickListener {
-            sendCommand("RCLICK")
-        }
-
-        leftClickBtn.setOnClickListener {
-            sendCommand("LCLICK")
-        }
+        rightClickBtn.setOnClickListener { sendCommand("RCLICK") }
+        leftClickBtn.setOnClickListener { sendCommand("LCLICK") }
 
         // Setup gesture detector
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                sendCommand("LCLICK")
-                return true
-            }
-
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                // Normal double click if not dragging
-                if (!isDragging) {
-                    sendCommand("DCLICK")
-                }
-                return true
-            }
-
+            override fun onSingleTapConfirmed(e: MotionEvent) = sendClick("LCLICK")
+            override fun onDoubleTap(e: MotionEvent) = sendClick("DCLICK")
             override fun onDoubleTapEvent(e: MotionEvent): Boolean {
                 when (e.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        // Start drag immediately on second tap hold
-                        if (!isDragging) {
-                            isDragging = true
-                            sendCommand("DRAG_START")
-                        }
+                    MotionEvent.ACTION_DOWN -> if (!isDragging) {
+                        isDragging = true
+                        sendCommand("DRAG_START")
                     }
-                    MotionEvent.ACTION_UP -> {
-                        if (isDragging) {
-                            sendCommand("DRAG_END")
-                            isDragging = false
-                        }
+                    MotionEvent.ACTION_UP -> if (isDragging) {
+                        sendCommand("DRAG_END")
+                        isDragging = false
                     }
                 }
                 return true
             }
 
             override fun onLongPress(e: MotionEvent) {
-                // Normal long press = Right click
-                if (!isDragging) {
-                    sendCommand("RCLICK")
-                }
+                if (!isDragging) sendCommand("RCLICK")
+            }
+
+            private fun sendClick(cmd: String): Boolean {
+                if (!isDragging) sendCommand(cmd)
+                return true
             }
         })
 
@@ -116,50 +97,39 @@ class MainActivity : AppCompatActivity() {
                         val dx = (event.x - event.getHistoricalX(0)).toInt()
                         val dy = (event.y - event.getHistoricalY(0)).toInt()
 
-                        if (abs(dx) < 3 && abs(dy) < 3) return@setOnTouchListener true
+                        // ignore tiny moves
+                        if (abs(dx) < 5 && abs(dy) < 5) return@setOnTouchListener true
 
                         val now = System.currentTimeMillis()
                         val interval = if (isDragging) dragInterval else normalInterval
                         if (now - lastSendTime > interval) {
-                            if (isDragging) {
-                                sendCommand("DRAG_MOVE,$dx,$dy")
-                            } else {
-                                sendCommand("M,$dx,$dy")
-                            }
+                            if (isDragging) sendCommand("DRAG_MOVE,$dx,$dy")
+                            else sendCommand("M,$dx,$dy")
                             lastSendTime = now
                         }
                     }
                 }
-
-                MotionEvent.ACTION_UP -> {
-                    if (isDragging) {
-                        sendCommand("DRAG_END")
-                        isDragging = false
-                    }
+                MotionEvent.ACTION_UP -> if (isDragging) {
+                    sendCommand("DRAG_END")
+                    isDragging = false
                 }
             }
             true
         }
     }
 
-    private fun sendCommand(cmd: String) {
-        executor.execute {
-            try {
-                writer?.println(cmd)
-                writer?.flush()
-                Log.d("MouseClient", "Sent: $cmd")
-            } catch (e: Exception) {
-                Log.e("MouseClient", "Send failed", e)
-                updateStatus("Send failed: ${e.message}")
-            }
+    private fun sendCommand(cmd: String) = executor.execute {
+        try {
+            writer?.println(cmd)
+            writer?.flush()
+            Log.d("MouseClient", "Sent: $cmd")
+        } catch (e: Exception) {
+            Log.e("MouseClient", "Send failed", e)
+            updateStatus("Send failed: ${e.message}")
         }
     }
 
-    private fun updateStatus(msg: String) {
-        uiHandler.post {
-            statusText.text = msg
-        }
-    }
+    private fun updateStatus(msg: String) = uiHandler.post { statusText.text = msg }
 
     override fun onDestroy() {
         super.onDestroy()
