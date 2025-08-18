@@ -8,7 +8,9 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.io.PrintWriter
 import java.net.Socket
@@ -17,8 +19,8 @@ import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
 
-    private val serverIp = "192.168.1.7"   // change to your server IP
-    private val serverPort = 5007
+    private var serverIp: String = ""
+    private var serverPort: Int = 0
 
     private var socket: Socket? = null
     private var writer: PrintWriter? = null
@@ -29,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var lastSendTime = 0L
     private val normalInterval = 35L
     private val dragInterval = 25L
-    private val movementThreshold = 4  // configurable 3–5px
+    private val movementThreshold = 5  // configurable 3–5px
 
     private val executor = Executors.newSingleThreadExecutor()
     private val uiHandler = Handler(Looper.getMainLooper())
@@ -43,28 +45,36 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // ✅ Get IP and Port from ConnectionActivity
+        serverIp = intent.getStringExtra("SERVER_IP") ?: ""
+        serverPort = intent.getIntExtra("SERVER_PORT", 5007)
+
         statusText = findViewById(R.id.statusText)
         val touchPad = findViewById<View>(R.id.touchPad)
         val rightClickBtn = findViewById<Button>(R.id.rightClickBtn)
         val leftClickBtn = findViewById<Button>(R.id.leftClickBtn)
         val scrollArea = findViewById<View>(R.id.scrollArea)
+        val backBtn = findViewById<ImageButton>(R.id.backButton)
         var lastScrollY = 0f
-
 
         // Connect in background
         executor.execute {
             try {
-                socket = Socket(serverIp, serverPort)
+                socket = Socket(serverIp, serverPort) // <-- real socket
                 writer = PrintWriter(socket!!.getOutputStream(), true)
-                updateStatus("Connected to $serverIp:$serverPort")
+                updateStatus("✅ Connected to $serverIp:$serverPort")
             } catch (e: Exception) {
-                updateStatus("Connection failed: ${e.message}")
-                Log.e("MouseClient", "Connection error", e)
+                updateStatus("❌ Connection failed.")
+                runOnUiThread {
+                    Toast.makeText(this, "Cannot connect to server", Toast.LENGTH_LONG).show()
+                    finish() // go back to ConnectActivity
+                }
             }
         }
 
         rightClickBtn.setOnClickListener { sendCommand("RCLICK") }
         leftClickBtn.setOnClickListener { sendCommand("LCLICK") }
+        backBtn.setOnClickListener { finish() }
 
         // Gesture detector
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
